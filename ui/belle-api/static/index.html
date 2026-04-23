@@ -1,0 +1,2392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#f0f1f0" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>Datum Codex — Engineering Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #f0f1f0;
+      --surface:      #f8f8f7;
+      --surface2:     #eaeff5;
+      --border:       #d8dce0;
+      --text:         #0f1923;
+      --text-dim:     #8e9fad;
+      --text-mid:     #5a6f80;
+      --accent:       #c89632;
+      --accent-bg:    #fdf6e8;
+      --user-bg:      #1d3a5c;
+      --primary:      #1d3a5c;
+      --primary-mid:  #2b567e;
+      --primary-light:#eaeff5;
+      --success:      #3a7a4a;
+      --danger:       #b84030;
+      --radius:       6px;
+      --memory-w:     280px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    #app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Chat history sidebar ── */
+    #sidebar {
+      width: 220px;
+      min-width: 220px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      transition: width 0.2s, min-width 0.2s;
+    }
+    #app.sidebar-hidden #sidebar { width: 0; min-width: 0; }
+    #sidebar-header {
+      padding: 12px 14px 8px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+    }
+    #sidebar-header i { font-size: 14px; color: var(--accent); }
+    #sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    #sidebar-list::-webkit-scrollbar { width: 4px; }
+    #sidebar-list::-webkit-scrollbar-track { background: transparent; }
+    #sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sidebar-item {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-radius: var(--radius);
+      margin: 1px 4px;
+      transition: background 0.12s;
+      line-height: 1.35;
+    }
+    .sidebar-item:hover { background: var(--surface2); }
+    .sidebar-item.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .sidebar-item-date {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 2px;
+      display: block;
+    }
+
+    /* ── Sidebar tabs (History / Library) ── */
+    #sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sidebar-tab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      letter-spacing: 0.04em;
+      padding: 9px 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sidebar-tab:hover:not(.active) { color: var(--text); }
+    #sidebar-history, #sidebar-library { flex: 1; overflow-y: auto; }
+    #sidebar-history::-webkit-scrollbar,
+    #sidebar-library::-webkit-scrollbar { width: 4px; }
+    #sidebar-history::-webkit-scrollbar-thumb,
+    #sidebar-library::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Library panel items ── */
+    .lib-section-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 10px 14px 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .lib-section-title i { color: var(--accent); font-size: 12px; }
+    .lib-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      border-radius: var(--radius);
+      margin: 1px 4px;
+      transition: background 0.1s;
+      overflow: hidden;
+    }
+    .lib-item:hover { background: var(--surface2); }
+    .lib-item i { flex-shrink: 0; color: var(--accent); font-size: 13px; }
+    .lib-item-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .lib-loading {
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 12px 14px;
+      font-style: italic;
+    }
+    #btn-sidebar-toggle {
+      display: flex;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-mid); border-radius: var(--radius);
+      padding: 8px 10px; font-size: 16px; cursor: pointer;
+      transition: all 0.15s; min-height: 36px;
+      align-items: center; justify-content: center;
+    }
+    #btn-sidebar-toggle:hover, #btn-sidebar-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+    /* ── File download links ── */
+    .file-download-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 4px 10px; margin: 2px 0;
+      color: var(--accent); text-decoration: none; font-size: 13px;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .file-download-link:hover { background: var(--surface); border-color: var(--accent); }
+    .file-download-link i { font-size: 14px; }
+
+
+    /* ── Main area ── */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; position: relative; }
+
+    /* ── Header (full-width top bar) ── */
+    #chat-header {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .header-icon {
+      width: 32px; height: 32px;
+      background: var(--primary);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); font-size: 16px; flex-shrink: 0;
+    }
+
+    #chat-persona-name {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 15px; font-weight: 600; flex: 1;
+    }
+
+    #chat-header-right { display: flex; align-items: center; gap: 8px; }
+
+    #btn-new-conv {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-mid); border-radius: var(--radius);
+      padding: 8px 13px; font-size: 13px; font-weight: 500;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      cursor: pointer; transition: all 0.15s; min-height: 36px;
+      display: flex; align-items: center;
+    }
+    #btn-new-conv:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+    #btn-memory-toggle {
+      display: flex;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-mid); border-radius: var(--radius);
+      padding: 8px 10px; font-size: 16px; cursor: pointer;
+      transition: all 0.15s; min-height: 36px;
+      align-items: center; justify-content: center;
+    }
+    #btn-memory-toggle:hover, #btn-memory-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+    #btn-settings {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-mid); border-radius: var(--radius);
+      padding: 8px 10px; font-size: 16px; cursor: pointer;
+      transition: all 0.15s; min-height: 36px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #btn-settings:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+    .settings-menu {
+      position: absolute; top: 100%; right: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      z-index: 50; margin-top: 8px; min-width: 220px;
+      padding: 12px; gap: 10px; display: flex; flex-direction: column;
+    }
+    .settings-group { display: flex; flex-direction: column; gap: 6px; }
+    .settings-group > label:first-child {
+      font-size: 11px; font-weight: 600; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+    .settings-group select {
+      background: var(--surface2); color: var(--text-mid);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 8px 10px; font-size: 13px; font-family: inherit;
+      cursor: pointer; outline: none; transition: all 0.15s;
+    }
+    .settings-group select:hover { border-color: var(--accent); }
+    .settings-group label:has(input[type="checkbox"]) {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 500; font-size: 13px; cursor: pointer;
+      text-transform: none; letter-spacing: normal;
+      color: var(--text-mid);
+    }
+    .settings-group input[type="checkbox"] { cursor: pointer; width: 16px; height: 16px; }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1; overflow-y: auto; padding: 24px 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    #messages.hide-cost .msg-meta { display: none; }
+    #chat-header.hide-version #version-badge { display: none; }
+
+    /* Work mode: hide personal content */
+    body.work-mode [data-personal="true"] { display: none !important; }
+    body.work-mode .memory-item[data-personal="true"] { display: none !important; }
+    body.work-mode .artifact-tab[data-personal="true"] { display: none !important; }
+
+    .msg { padding: 4px 15%; display: flex; flex-direction: column; }
+    .msg.user { align-items: flex-end; }
+    .msg.assistant { align-items: flex-start; }
+
+    .msg-bubble {
+      max-width: 78%; padding: 12px 16px; border-radius: var(--radius);
+      font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+    }
+    .msg.user .msg-bubble {
+      background: var(--user-bg); color: #fff;
+      border: 1px solid var(--user-bg); border-bottom-right-radius: 3px;
+    }
+    .msg.assistant .msg-bubble {
+      background: var(--surface); border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+
+    /* Inline style */
+    #messages.inline .msg-bubble { padding: 8px 0; background: transparent; border: none; }
+    #messages.inline .msg.user .msg-bubble { color: inherit; }
+
+    .msg-bubble strong { font-weight: 600; }
+    .msg-bubble em { font-style: italic; }
+    .msg-bubble code {
+      background: rgba(29,58,92,0.06); border-radius: 4px;
+      padding: 2px 5px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    }
+    .msg-bubble pre {
+      background: rgba(29,58,92,0.06); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0;
+    }
+    .msg-bubble pre code { background: none; padding: 0; }
+    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3 {
+      font-family: 'Space Grotesk', sans-serif; color: var(--primary); margin: 8px 0 4px;
+    }
+    .msg-bubble h1 { font-size: 18px; } .msg-bubble h2 { font-size: 16px; } .msg-bubble h3 { font-size: 14px; }
+    .msg-bubble ul, .msg-bubble ol { padding-left: 20px; margin: 6px 0; }
+    .msg-bubble li { margin: 2px 0; }
+    .msg-bubble a { color: var(--accent); text-decoration: underline; }
+    .msg-bubble p { margin-bottom: 6px; }
+    .msg-bubble p:last-child { margin-bottom: 0; }
+
+    .msg-meta { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+    /* Tool blocks */
+    .tool-block { max-width: 78%; margin-bottom: 4px; }
+    .tool-summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 6px;
+      font-size: 12px; color: var(--text-mid); cursor: pointer;
+      user-select: none; list-style: none;
+    }
+    .tool-summary:hover { border-color: var(--text-mid); }
+    .tool-icon { font-size: 13px; color: var(--accent); }
+    .tool-name { font-weight: 500; }
+    .tool-preview { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+    details[open] .tool-summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .tool-detail {
+      background: var(--bg); border: 1px solid var(--border);
+      border-top: none; border-radius: 0 0 6px 6px;
+      padding: 10px 12px; font-family: 'JetBrains Mono', monospace;
+      font-size: 12px; color: var(--text-mid); white-space: pre-wrap;
+      word-break: break-all; max-height: 200px; overflow-y: auto;
+    }
+
+    /* Loading dots */
+    .msg-loading {
+      padding: 6px 15%; display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-dim);
+    }
+    .loading-dots span {
+      display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+      background: var(--text-dim); margin: 0 2px;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,80%,100% { transform: scale(0.6); opacity:0.4; } 40% { transform: scale(1); opacity:1; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .cursor::after { content: "▋"; animation: blink 0.7s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Input area ── */
+    #input-area {
+      padding: 16px 15%; border-top: 1px solid var(--border);
+      background: var(--bg); display: flex; flex-direction: column; gap: 8px;
+    }
+    #input-row { display: flex; align-items: flex-end; gap: 10px; }
+
+    #btn-attach {
+      background: none; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 10px;
+      font-size: 16px; cursor: pointer; color: var(--text-dim);
+      flex-shrink: 0; transition: border-color 0.15s, color 0.15s;
+    }
+    #btn-attach:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Voice button — present but disabled */
+    #btn-voice {
+      background: none; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 10px;
+      font-size: 16px; cursor: not-allowed; color: var(--border);
+      flex-shrink: 0; position: relative;
+    }
+
+    #input {
+      flex: 1; background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 14px; font-size: 14px; font-family: inherit;
+      line-height: 1.5; resize: none; max-height: 200px;
+      overflow-y: auto; outline: none; transition: border-color 0.15s;
+    }
+    #input:focus { border-color: var(--accent); }
+    #input:disabled { opacity: 0.5; cursor: not-allowed; background: var(--border); }
+
+    #btn-send {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius); padding: 12px 24px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      white-space: nowrap; transition: all 0.15s;
+      box-shadow: 0 2px 6px rgba(200,150,50,0.2);
+    }
+    #btn-send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+    #btn-send:not(:disabled):hover { background: #a67b28; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(200,150,50,0.3); }
+
+    /* Artifact mode — expanded input */
+    #app.artifacts-open #input-area { padding: 12px 8%; }
+    #app.artifacts-open #input-row { flex-direction: column; align-items: stretch; gap: 8px; }
+    #app.artifacts-open #input { min-height: calc(3 * 1.5em + 24px); max-height: 300px; }
+    #app.artifacts-open #btn-send { width: 100%; }
+    #app.artifacts-open #btn-attach { align-self: flex-start; }
+
+    #file-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    #file-chips:empty { display: none; }
+    .file-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; max-width: 200px;
+      white-space: nowrap; overflow: hidden;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text-mid);
+    }
+    .file-chip-remove {
+      background: none; border: none; color: inherit;
+      cursor: pointer; padding: 0; font-size: 14px;
+      line-height: 1; opacity: 0.6; flex-shrink: 0;
+    }
+    .file-chip-remove:hover { opacity: 1; }
+
+    #upload-hint { font-size: 11px; color: var(--text-dim); text-align: center; }
+
+    /* ── Memory panel ── */
+    #memory-panel {
+      width: var(--memory-w); flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    #memory-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #memory-header h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px; font-weight: 700; color: var(--primary); flex: 1;
+    }
+    #memory-count {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      color: var(--text-dim); background: var(--bg);
+      border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;
+    }
+    .memory-icon-btn {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 15px; padding: 2px;
+      display: flex; align-items: center; transition: color 0.15s;
+    }
+    .memory-icon-btn:hover { color: var(--primary); }
+
+    #memory-body {
+      flex: 1; overflow-y: auto; padding: 10px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    .memory-empty {
+      text-align: center; padding: 24px 12px;
+      color: var(--text-dim); font-size: 13px; line-height: 1.5;
+    }
+    .memory-empty i { font-size: 28px; color: var(--border); display: block; margin-bottom: 8px; }
+
+    .memory-cat-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--text-dim); margin-top: 4px; padding: 0 2px;
+    }
+    .memory-cat-label:first-child { margin-top: 0; }
+
+    .memory-item {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; padding: 7px 10px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .memory-key { font-size: 11px; font-weight: 600; color: var(--primary); }
+    .memory-value { font-size: 12px; color: var(--text-mid); line-height: 1.4; }
+    .memory-footer { display: flex; justify-content: flex-end; margin-top: 2px; }
+    .memory-delete {
+      background: none; border: none; color: var(--border);
+      cursor: pointer; font-size: 12px; padding: 0; line-height: 1; transition: color 0.15s;
+    }
+    .memory-delete:hover { color: var(--danger); }
+
+    /* Files section inside memory panel */
+    #files-header {
+      display: flex; align-items: center; gap: 6px;
+      border-top: 1px solid var(--border); padding: 10px 16px 6px; flex-shrink: 0;
+    }
+    #files-header span {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 12px; font-weight: 700; color: var(--primary); flex: 1;
+    }
+    #files-list {
+      padding: 0 10px 10px; display: flex; flex-direction: column;
+      gap: 3px; max-height: 130px; overflow-y: auto; flex-shrink: 0;
+    }
+    .file-entry {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-mid);
+    }
+    .file-entry i { color: var(--accent); font-size: 13px; flex-shrink: 0; }
+    #files-empty { font-size: 11px; color: var(--text-dim); padding: 0 10px 10px; }
+
+    /* ── Welcome screen ── */
+    #welcome {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      pointer-events: none; z-index: 5;
+    }
+    #welcome.hidden { display: none; }
+    #welcome-inner {
+      text-align: center; max-width: 480px; padding: 32px 24px;
+      pointer-events: auto;
+    }
+    #welcome-icon {
+      font-size: 48px; color: var(--accent); margin-bottom: 16px; line-height: 1;
+    }
+    #welcome-inner h2 {
+      font-family: 'Space Grotesk', sans-serif; font-size: 26px;
+      font-weight: 600; color: var(--text); margin: 0 0 10px;
+    }
+    #welcome-inner p {
+      color: var(--text-dim); font-size: 15px; line-height: 1.6;
+      margin: 0 0 24px;
+    }
+    #welcome-prompts {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .welcome-prompt {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 14px;
+      font-size: 13px; color: var(--text-dim); cursor: pointer;
+      text-align: left; line-height: 1.4; transition: border-color 0.15s, color 0.15s;
+    }
+    .welcome-prompt:hover { border-color: var(--accent); color: var(--text); }
+    @media (max-width: 899px) {
+      #welcome-prompts { grid-template-columns: 1fr; }
+      #welcome-inner h2 { font-size: 22px; }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--primary); color: #fff; border-radius: 6px;
+      padding: 10px 18px; font-size: 13px; z-index: 200;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2); pointer-events: none;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Mobile overlay for memory ── */
+    #memory-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.5);
+    }
+    #memory-overlay.open { display: flex; justify-content: flex-end; }
+    #memory-overlay #memory-panel {
+      height: 100%; width: min(var(--memory-w), 85vw);
+      box-shadow: -4px 0 16px rgba(0,0,0,0.15);
+    }
+
+    /* ── Desktop: memory panel toggled via JS ── */
+    @media (min-width: 900px) {
+      #memory-panel { display: flex; transition: width 0.2s, opacity 0.2s; }
+      #app.memory-hidden #memory-panel { display: none; }
+      #app.memory-hidden #resize-memory { display: none; }
+      #app.artifacts-open.memory-hidden #artifacts-panel { width: 50%; }
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 899px) {
+      #sidebar { display: none !important; }
+      #btn-sidebar-toggle { display: none !important; }
+      #memory-panel { display: none !important; } /* hidden; opened via overlay */
+      #resize-memory { display: none !important; }
+      .resize-handle { display: none !important; }
+
+      .msg { padding: 3px 3%; }
+      .msg-bubble { max-width: 90%; font-size: 15px; padding: 11px 14px; }
+      .tool-block { max-width: 90%; }
+      .msg-loading { padding: 6px 3%; }
+
+      #chat-header { padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 6px; }
+      #chat-persona-name { font-size: 14px; }
+      #mode-select { font-size: 12px !important; padding: 3px 6px !important; }
+
+      /* Give chat room above the bottom-sheet peek */
+      #main { padding-bottom: 46px; }
+      #input-area {
+        padding: 10px 3%;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        gap: 6px;
+      }
+      #input { font-size: 16px; }
+      #btn-send { min-height: 44px; padding: 11px 20px; }
+
+      .settings-menu {
+        position: fixed; top: auto; right: auto; bottom: 0; left: 0;
+        border-radius: 12px 12px 0 0; border: none; border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 16px rgba(0,0,0,0.1); margin: 0; min-width: auto;
+        width: 100%; max-height: 80vh; overflow-y: auto; padding: 16px 16px 32px; z-index: 150;
+      }
+
+      html, body { overscroll-behavior: none; }
+      #app { height: 100dvh; overscroll-behavior: none; }
+
+      /* ── Artifact bottom-sheet drawer (mobile) ── */
+      #artifacts-panel {
+        display: flex !important;
+        position: fixed !important;
+        left: 0; right: 0; bottom: 0;
+        width: 100% !important;
+        height: 70vh !important;
+        max-height: 70vh;
+        transform: translateY(calc(100% - 44px)); /* peek tab height */
+        transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+        z-index: 90;
+        border-top: 1px solid var(--border);
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+        border-radius: 14px 14px 0 0;
+        background: var(--surface);
+      }
+      #app.artifact-sheet-open #artifacts-panel {
+        transform: translateY(0);
+      }
+      #artifacts-header {
+        height: 44px; flex-shrink: 0;
+        padding: 0 12px;
+        position: relative;
+      }
+      #artifacts-header::before {
+        content: ''; position: absolute; top: 6px; left: 50%;
+        transform: translateX(-50%);
+        width: 36px; height: 4px; border-radius: 2px;
+        background: var(--border);
+      }
+      /* Hide secondary header controls on mobile to declutter */
+      #browser-url-bar, #btn-artifact-orient { display: none !important; }
+
+      /* Use btn-artifacts to toggle sheet */
+      #btn-artifacts { display: inline-flex !important; }
+    }
+
+    button, select, textarea { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+    /* ── Resize handle ── */
+    .resize-handle {
+      width: 5px; flex-shrink: 0; cursor: col-resize;
+      background: transparent; position: relative; z-index: 10;
+    }
+    .resize-handle::after {
+      content: ''; position: absolute; top: 0; bottom: 0;
+      left: 2px; width: 1px; background: var(--border);
+      transition: background 0.15s;
+    }
+    .resize-handle:hover::after, .resize-handle.dragging::after {
+      background: var(--accent); width: 3px; left: 1px;
+    }
+
+    /* ── Artifacts panel ── */
+    #artifacts-panel {
+      width: 0; flex-shrink: 0; display: none;
+      flex-direction: column; overflow: hidden;
+      background: var(--surface);
+    }
+    #app.artifacts-open #artifacts-panel,
+    #app.artifacts-open.artifact-portrait #artifacts-panel,
+    #app.artifacts-open.artifact-landscape #artifacts-panel {
+      width: 60%; display: flex;
+    }
+    #app.artifacts-open #main {
+      min-width: 300px;
+    }
+
+    #artifacts-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    #artifacts-header i { color: var(--accent); font-size: 15px; flex-shrink: 0; }
+    #artifacts-title {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 13px; font-weight: 600; flex: 1;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    #artifacts-tabs {
+      display: flex; overflow-x: auto; gap: 4px;
+      padding: 6px 10px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; scrollbar-width: none;
+    }
+    #artifacts-tabs:empty { display: none; }
+    #artifacts-tabs::-webkit-scrollbar { display: none; }
+    .artifact-tab {
+      flex-shrink: 0; padding: 4px 10px; border-radius: 4px;
+      font-size: 11px; font-weight: 500; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text-mid); white-space: nowrap; max-width: 140px;
+      overflow: hidden; text-overflow: ellipsis;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      transition: all 0.12s;
+    }
+    .artifact-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .artifact-tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+    #artifacts-content {
+      flex: 1; overflow: hidden; position: relative;
+    }
+    #artifacts-content iframe {
+      width: 100%; height: 100%; border: none; background: #fff;
+    }
+    #artifacts-content .artifact-text {
+      padding: 16px; overflow-y: auto; height: 100%;
+      font-size: 13px; line-height: 1.6; color: var(--text);
+      white-space: pre-wrap; word-break: break-word;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #artifacts-content .artifact-image {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; overflow: auto; padding: 16px; background: #f5f5f5;
+    }
+    #artifacts-content .artifact-image img {
+      max-width: 100%; max-height: 100%; object-fit: contain;
+      border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #artifacts-content .artifact-code {
+      padding: 16px; overflow: auto; height: 100%;
+      font-size: 13px; line-height: 1.55; color: var(--text);
+      background: #1e2430; color: #c9d1d9;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #artifacts-content .artifact-code .ln {
+      display: inline-block; width: 3.5em; text-align: right;
+      padding-right: 1em; color: #484f58; user-select: none;
+    }
+    #artifacts-content .artifact-code .kw { color: #ff7b72; }
+    #artifacts-content .artifact-code .str { color: #a5d6ff; }
+    #artifacts-content .artifact-code .cm { color: #8b949e; font-style: italic; }
+    #artifacts-content .artifact-code .fn { color: #d2a8ff; }
+    #artifacts-content .artifact-code .num { color: #79c0ff; }
+    #artifacts-content .artifact-code .op { color: #ff7b72; }
+    #artifacts-content .artifact-markdown {
+      padding: 20px 24px; overflow-y: auto; height: 100%;
+      font-size: 14px; line-height: 1.7; color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+    #artifacts-content .artifact-markdown h1,
+    #artifacts-content .artifact-markdown h2,
+    #artifacts-content .artifact-markdown h3 {
+      font-family: 'Space Grotesk', sans-serif; margin: 0.8em 0 0.4em;
+    }
+    #artifacts-content .artifact-markdown h1 { font-size: 20px; }
+    #artifacts-content .artifact-markdown h2 { font-size: 17px; }
+    #artifacts-content .artifact-markdown h3 { font-size: 15px; }
+    #artifacts-content .artifact-markdown p { margin: 0.5em 0; }
+    #artifacts-content .artifact-markdown code {
+      background: var(--surface2); padding: 2px 5px; border-radius: 3px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.9em;
+    }
+    #artifacts-content .artifact-markdown pre {
+      background: #1e2430; color: #c9d1d9; padding: 12px 16px;
+      border-radius: var(--radius); overflow-x: auto; margin: 0.8em 0;
+    }
+    #artifacts-content .artifact-markdown pre code {
+      background: none; padding: 0; color: inherit;
+    }
+    #artifacts-content .artifact-markdown ul,
+    #artifacts-content .artifact-markdown ol { padding-left: 1.5em; margin: 0.5em 0; }
+    #artifacts-content .artifact-markdown blockquote {
+      border-left: 3px solid var(--accent); padding-left: 12px; margin: 0.5em 0;
+      color: var(--text-mid); font-style: italic;
+    }
+    #artifacts-content .artifact-markdown table {
+      border-collapse: collapse; margin: 0.8em 0; width: 100%;
+    }
+    #artifacts-content .artifact-markdown table th,
+    #artifacts-content .artifact-markdown table td {
+      border: 1px solid var(--border); padding: 5px 10px; font-size: 13px;
+    }
+    #artifacts-content .artifact-markdown table th {
+      background: var(--surface2); font-weight: 600;
+    }
+    #artifacts-content .artifact-table-wrap {
+      overflow: auto; height: 100%; padding: 12px;
+    }
+    #artifacts-content .artifact-excel {
+      display: flex; flex-direction: column; height: 100%; overflow: hidden;
+    }
+    .sheet-tabs {
+      display: flex; gap: 2px; padding: 6px 12px; border-bottom: 1px solid var(--border);
+      background: var(--bg); flex-shrink: 0; overflow-x: auto; scrollbar-width: none;
+    }
+    .sheet-tabs::-webkit-scrollbar { display: none; }
+    .sheet-tab {
+      padding: 4px 12px; border-radius: 4px 4px 0 0; font-size: 11px; font-weight: 600;
+      border: 1px solid var(--border); border-bottom: none; background: var(--surface2);
+      color: var(--text-mid); cursor: pointer; white-space: nowrap;
+      font-family: 'Space Grotesk', sans-serif; transition: all 0.12s;
+    }
+    .sheet-tab.active { background: var(--surface); color: var(--primary); border-bottom: 1px solid var(--surface); margin-bottom: -1px; }
+    .sheet-tab:hover:not(.active) { color: var(--text); }
+    .sheet-body { overflow: auto; flex: 1; padding: 12px; }
+    #artifacts-content table {
+      border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%;
+    }
+    #artifacts-content th {
+      background: var(--primary); color: #fff; border: 1px solid var(--primary-mid);
+      padding: 7px 12px; text-align: left; font-weight: 700;
+      font-family: 'Space Grotesk', sans-serif; font-size: 12px;
+      position: sticky; top: 0; z-index: 2;
+      white-space: nowrap;
+    }
+    #artifacts-content td {
+      border: 1px solid var(--border); padding: 5px 10px;
+      color: var(--text-mid); white-space: nowrap;
+    }
+    #artifacts-content tr:nth-child(even) td { background: var(--surface2); }
+
+    #artifacts-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 10px;
+      color: var(--text-dim); font-size: 13px; text-align: center; padding: 24px;
+    }
+    #artifacts-empty i { font-size: 36px; color: var(--border); }
+
+    /* Artifact button on code blocks */
+    .artifact-open-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500; padding: 3px 9px;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text-mid);
+      cursor: pointer; margin-top: 4px; font-family: 'Space Grotesk', sans-serif;
+      transition: all 0.12s;
+    }
+    .artifact-open-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    #btn-artifacts {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-mid); border-radius: var(--radius);
+      padding: 8px 10px; font-size: 16px; cursor: pointer;
+      transition: all 0.15s; min-height: 36px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #btn-artifacts:hover, #btn-artifacts.active { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header (full-width top bar) -->
+  <div id="chat-header" class="hide-version">
+    <div class="header-icon"><i class="ph-duotone ph-flower-lotus" id="chat-persona-icon"></i></div>
+    <span id="chat-persona-name">Datum Codex</span>
+    <span id="version-badge" style="font-size:11px;color:#64748b;margin-left:6px;">v1.2.0</span>
+      <div id="chat-header-right">
+        <button id="btn-sidebar-toggle" title="Toggle chat history" onclick="toggleSidebar()">
+          <i class="ph ph-clock-counter-clockwise"></i>
+        </button>
+
+        <button id="btn-memory-toggle" title="Toggle memory panel" onclick="toggleMemoryPanel()">
+          <i class="ph ph-brain"></i>
+        </button>
+        <button id="btn-artifacts" title="Toggle artifacts pane" onclick="toggleArtifacts()">
+          <i class="ph ph-layout"></i>
+        </button>
+        <button id="btn-new-conv" onclick="newConversation()">New</button>
+        <div style="position:relative;">
+          <button id="btn-settings" title="Settings" onclick="toggleSettings()">
+            <i class="ph ph-gear-six"></i>
+          </button>
+          <div id="settings-menu" class="settings-menu" style="display:none;">
+            <div class="settings-group">
+              <label>Model</label>
+              <select id="model-select">
+              <optgroup label="OpenAI">
+                <option value="gpt-5.4" selected>GPT-5.4</option>
+                <option value="gpt-5.4-mini">GPT-5.4 mini</option>
+                <option value="codex-5.4">Codex-5.4</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4o-mini">GPT-4o mini</option>
+              </optgroup></select>
+            </div>
+            <div class="settings-group">
+              <label>
+                <input type="checkbox" id="cost-toggle" onchange="toggleCost(this)" />
+                <span>Show cost</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <label>
+                <input type="checkbox" id="style-toggle" onchange="toggleBubbleStyle(this)" />
+                <span>Inline style</span>
+              </label>
+            </div>
+            <div class="settings-group">
+              <label>
+                <input type="checkbox" id="work-mode-toggle" onchange="toggleWorkMode(this)" />
+                <span>Work mode (hide personal)</span>
+              </label>
+            </div>
+          </div>
+            <div class="settings-group">
+              <label>
+                <input type="checkbox" id="version-toggle" onchange="toggleVersion(this)" />
+                <span>Show version</span>
+              </label>
+            </div>
+        </div>
+      </div>
+  </div><!-- /chat-header -->
+  <div id="app-body">
+
+  <!-- Chat history / Library sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-tabs">
+      <button class="sidebar-tab active" id="sidebar-tab-history" onclick="showSidebarTab('history')">
+        <i class="ph ph-clock-counter-clockwise"></i> History
+      </button>
+      <button class="sidebar-tab" id="sidebar-tab-library" onclick="showSidebarTab('library')">
+        <i class="ph ph-books"></i> Library
+      </button>
+    </div>
+    <div id="sidebar-history">
+      <div id="sidebar-list">
+        <div class="sidebar-item" style="color:rgba(0,0,0,0.25);font-size:12px;cursor:default;">Loading…</div>
+      </div>
+    </div>
+    <div id="sidebar-library" style="display:none;">
+      <div class="lib-loading">Loading library…</div>
+    </div>
+  </div>
+
+  <div id="main">
+
+    <!-- Messages -->
+    <div id="messages" class="hide-cost"></div>
+
+    <!-- Welcome screen (hidden once chat starts) -->
+    <div id="welcome">
+      <div id="welcome-inner">
+        <div id="welcome-icon"><i class="ph-duotone ph-flower-lotus" id="welcome-persona-icon"></i></div>
+        <h2 id="welcome-title">Datum Codex — Marketing Assistant</h2>
+        <p id="welcome-sub">Social media, content calendars, captions, newsletters, and competitor research for Kauai small businesses.</p>
+        <div id="welcome-prompts">
+          <button class="welcome-prompt" onclick="sendPrompt(this)">Write 3 Instagram captions for a Kauai beachfront cafe</button>
+          <button class="welcome-prompt" onclick="sendPrompt(this)">Create a 4-week content calendar for a Poipu yoga studio</button>
+          <button class="welcome-prompt" onclick="sendPrompt(this)">Research hashtag strategy for Kauai vacation rental hosts</button>
+          <button class="welcome-prompt" onclick="sendPrompt(this)">Draft a Mailchimp newsletter for a Princeville boutique hotel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input area -->
+    <div id="input-area">
+      <div id="file-chips"></div>
+      <div id="input-row">
+        <button id="btn-attach" title="Upload file" onclick="document.getElementById('file-input').click()">
+          <i class="ph ph-paperclip"></i>
+        </button>
+        <input type="file" id="file-input" style="display:none" accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.svg,.html,.htm,.pptx" onchange="uploadFile(this)" />
+        <button id="btn-voice" title="Voice chat — coming soon" onclick="showToast('Voice chat coming soon')">
+          <i class="ph ph-microphone"></i>
+        </button>
+        <textarea id="input" placeholder="Message…" rows="1"></textarea>
+        <button id="btn-send" onclick="submit()">
+          <i class="ph ph-arrow-up" style="font-size:16px;"></i>
+        </button>
+      </div>
+      <div id="upload-hint"></div>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- Resize: chat ↔ artifacts -->
+  <div class="resize-handle" id="resize-artifacts" style="display:none;"></div>
+
+  <!-- Artifacts panel -->
+  <div id="artifacts-panel">
+    <div id="artifacts-header">
+      <i class="ph ph-squares-four" id="artifacts-header-icon"></i>
+      <span id="artifacts-title">Artifacts</span>
+      <div id="browser-url-bar" style="display:none;flex:1;display:none;align-items:center;gap:5px;margin:0 6px;">
+        <input id="browser-url-input" type="url" placeholder="https://..." autocomplete="off"
+          style="flex:1;background:rgba(0,0,0,0.08);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;color:var(--text);outline:none;font-family:inherit;" />
+        <button onclick="browserGo()" style="background:var(--accent);border:none;border-radius:4px;padding:4px 10px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">Go</button>
+      </div>
+      <button class="memory-icon-btn" id="btn-artifact-download" title="Download" onclick="downloadArtifact()" style="display:none;"><i class="ph ph-download-simple"></i></button>
+      <button class="memory-icon-btn" id="btn-artifact-orient" title="Switch to landscape" onclick="toggleArtifactOrientation()"><i class="ph ph-arrows-out-line-horizontal"></i></button>
+      <button class="memory-icon-btn" id="btn-browser-toggle" title="Open browser" onclick="toggleBrowserMode()"><i class="ph ph-globe"></i></button>
+      <button class="memory-icon-btn" title="Close" onclick="closeArtifactsAll()"><i class="ph ph-x"></i></button>
+    </div>
+    <div id="artifacts-tabs"></div>
+    <div id="artifacts-content">
+      <div id="artifacts-empty">
+        <i class="ph ph-squares-four"></i>
+        <span>Artifacts will appear here.<br>Upload a file or ask Claude to generate HTML.</span>
+      </div>
+    </div>
+    <!-- Browser overlay (shown in browser mode) -->
+    <iframe id="browser-frame" src="" title="Browser" style="display:none;flex:1;border:none;width:100%;background:#fff;"></iframe>
+  </div>
+
+  <!-- Resize: artifacts ↔ memory -->
+  <div class="resize-handle" id="resize-memory"></div>
+
+  <!-- Memory panel (desktop inline, mobile overlay) -->
+  <div id="memory-panel">
+    <div id="memory-header">
+      <i class="ph ph-brain" style="color:var(--accent);font-size:15px;flex-shrink:0;"></i>
+      <h3>Memory</h3>
+      <span id="memory-count">0</span>
+      <button class="memory-icon-btn" title="Refresh" onclick="loadMemory()"><i class="ph ph-arrow-clockwise"></i></button>
+      <button class="memory-icon-btn" id="btn-close-memory" title="Close" onclick="closeMemoryOverlay()" style="display:none;">
+        <i class="ph ph-x"></i>
+      </button>
+    </div>
+    <div style="padding: 0 10px 8px;">
+      <input id="memory-search" type="text" placeholder="Filter memories…" oninput="filterMemories()"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+               padding:6px 9px;font-size:12px;font-family:inherit;color:var(--text);outline:none;
+               transition:border-color 0.15s;"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    </div>
+    <div id="memory-body">
+      <div class="memory-empty"><i class="ph ph-brain"></i>No memories yet.<br>Chat to get started.</div>
+    </div>
+    <div id="files-header">
+      <i class="ph ph-folder-open" style="color:var(--accent);font-size:14px;flex-shrink:0;"></i>
+      <span>Files</span>
+      <button class="memory-icon-btn" title="Refresh" onclick="loadFiles()"><i class="ph ph-arrow-clockwise"></i></button>
+    </div>
+    <div id="files-list">
+      <div id="files-empty" class="files-empty" style="font-size:11px;color:var(--text-dim);padding:0 2px 8px;">No files uploaded yet.</div>
+    </div>
+  </div>
+
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+<!-- Mobile memory overlay backdrop -->
+<div id="memory-overlay" onclick="closeMemoryOverlayIfBg(event)"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── State ──
+let history = [];
+let busy = false;
+let convId = localStorage.getItem('design_conv_id') || newConvId();
+
+function newConvId() {
+  const id = crypto.randomUUID?.() ?? ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16));
+  localStorage.setItem('design_conv_id', id);
+  return id;
+}
+
+const messagesEl = document.getElementById('messages');
+const inputEl    = document.getElementById('input');
+const sendBtn    = document.getElementById('send-btn') || document.getElementById('btn-send');
+
+// ── Settings ──
+function toggleSettings() {
+  const menu = document.getElementById('settings-menu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('settings-menu');
+  if (menu.style.display !== 'none' && !e.target.closest('#btn-settings') && !e.target.closest('.settings-menu')) {
+    menu.style.display = 'none';
+  }
+});
+function toggleCost(cb) {
+  messagesEl.classList.toggle('hide-cost', !cb.checked);
+}
+function toggleBubbleStyle(cb) {
+  messagesEl.classList.toggle('inline', cb.checked);
+}
+function toggleWorkMode(cb) {
+  document.body.classList.toggle('work-mode', cb.checked);
+  localStorage.setItem('gis-work-mode', cb.checked ? '1' : '0');
+}
+function getModel() {
+  return document.getElementById('model-select').value;
+}
+
+function getMode() {
+  const el = document.getElementById('mode-select');
+  return el ? el.value : 'designer';
+}
+
+function onModeChange(sel) {
+  const mode = sel.value;
+  const modelSel = document.getElementById('model-select');
+  const personaName = document.getElementById('chat-persona-name');
+  const personaIcon = document.getElementById('chat-persona-icon');
+  const welcomeIcon = document.getElementById('welcome-persona-icon');
+  const welcomeTitle = document.getElementById('welcome-title');
+  const welcomeSub = document.getElementById('welcome-sub');
+
+  if (mode === 'art-critic') {
+    personaName.textContent = 'Datum Codex';
+    if (personaIcon) personaIcon.className = 'ph-duotone ph-eye';
+    if (welcomeIcon) welcomeIcon.className = 'ph-duotone ph-eye';
+    if (welcomeTitle) welcomeTitle.textContent = 'Datum Codex';
+    if (welcomeSub) welcomeSub.innerHTML = 'Blunt, adversarial UI/UX critique. No code, no hedging. Paste a URL or drop an HTML file and ask for a verdict.';
+    modelSel.value = 'gpt-5.4';
+    modelSel.disabled = true;
+  } else {
+    personaName.textContent = 'Designer';
+    if (personaIcon) personaIcon.className = 'ph-duotone ph-flower-lotus';
+    if (welcomeIcon) welcomeIcon.className = 'ph-duotone ph-flower-lotus';
+    if (welcomeTitle) welcomeTitle.textContent = 'Datum Codex — Marketing Assistant';
+    if (welcomeSub) welcomeSub.innerHTML = 'Social media, content calendars, captions, newsletters, and competitor research for Kauai small businesses.';
+    modelSel.disabled = false;
+    if (modelSel.value === 'claude-opus-4-7') modelSel.value = 'gpt-5.4';
+  }
+  localStorage.setItem('codex-assistant-mode', mode);
+}
+
+// Restore mode on load
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('codex-assistant-mode');
+  const sel = document.getElementById('mode-select');
+  if (saved && sel) {
+    sel.value = saved;
+    onModeChange(sel);
+  }
+});
+
+// ── Toast ──
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── Memory panel toggle ──
+function toggleMemoryPanel() {
+  const isMobile = window.innerWidth < 900;
+  if (isMobile) {
+    openMemoryOverlay();
+  } else {
+    const app = document.getElementById('app');
+    const btn = document.getElementById('btn-memory-toggle');
+    const hidden = app.classList.toggle('memory-hidden');
+    btn.classList.toggle('active', !hidden);
+    if (!hidden) { loadMemory(); loadFiles(); }
+  }
+}
+function openMemoryOverlay() {
+  const overlay = document.getElementById('memory-overlay');
+  const panel   = document.getElementById('memory-panel');
+  const closeBtn = document.getElementById('btn-close-memory');
+  overlay.classList.add('open');
+  overlay.appendChild(panel);
+  panel.style.display = 'flex';
+  closeBtn.style.display = 'flex';
+  loadMemory();
+  loadFiles();
+}
+function closeMemoryOverlay() {
+  const overlay = document.getElementById('memory-overlay');
+  const panel   = document.getElementById('memory-panel');
+  const appBody = document.getElementById('app-body');
+  const closeBtn = document.getElementById('btn-close-memory');
+  appBody.appendChild(panel);
+  overlay.classList.remove('open');
+  closeBtn.style.display = 'none';
+  panel.style.display = '';
+}
+function closeMemoryOverlayIfBg(e) {
+  if (e.target === document.getElementById('memory-overlay')) closeMemoryOverlay();
+}
+
+// ── Input ──
+inputEl.addEventListener('input', () => {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 200) + 'px';
+});
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+
+function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+// ── Message rendering ──
+const TOOL_ICONS = {
+  store_memory:  'ph-brain',
+  recall_memory: 'ph-brain',
+  list_files:    'ph-folder-open',
+  read_file:     'ph-file-text',
+  web_search:    'ph-globe',
+};
+const TOOL_LABELS = {
+  store_memory:  'Stored memory',
+  recall_memory: 'Recalled memory',
+  list_files:    'Listed files',
+  read_file:     'Read file',
+  web_search:    'Web search',
+};
+
+function hideWelcome() {
+  const w = document.getElementById('welcome');
+  if (w) w.classList.add('hidden');
+}
+
+function sendPrompt(btn) {
+  inputEl.value = btn.textContent;
+  submit();
+}
+
+function addMsg(role, html, meta) {
+  hideWelcome();
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = html;
+  div.appendChild(bubble);
+  if (meta) {
+    const m = document.createElement('div');
+    m.className = 'msg-meta';
+    m.textContent = meta;
+    div.appendChild(m);
+  }
+  messagesEl.appendChild(div);
+  scrollBottom();
+  return bubble;
+}
+
+function addLoading() {
+  const div = document.createElement('div');
+  div.className = 'msg-loading'; div.id = 'msg-loading';
+  div.innerHTML = `<div class="loading-dots"><span></span><span></span><span></span></div><span>Thinking…</span>`;
+  messagesEl.appendChild(div);
+  scrollBottom();
+}
+function removeLoading() { document.getElementById('msg-loading')?.remove(); }
+
+function addToolBlock(name, input, result) {
+  const details = document.createElement('details');
+  details.className = 'msg tool-block';
+  const preview = typeof input === 'object' ? JSON.stringify(input).slice(0, 60) : String(input).slice(0, 60);
+  details.innerHTML = `
+    <summary class="tool-summary">
+      <i class="ph ${TOOL_ICONS[name] || 'ph-wrench'} tool-icon"></i>
+      <span class="tool-name">${TOOL_LABELS[name] || name}</span>
+      <span class="tool-preview">${esc(preview)}</span>
+    </summary>
+    <div class="tool-detail">${esc(result || '')}</div>`;
+  messagesEl.appendChild(details);
+
+  // Extract /app/files/ paths from tool results and show download cards
+  if (result) {
+    const fileMatch = result.match(/\/app\/files\/([^\s,)]+)/);
+    if (fileMatch) {
+      const fname = fileMatch[1];
+      const ext = fname.split('.').pop().toLowerCase();
+      const icon = /^(mp4|webm|mov)$/.test(ext) ? 'ph-video' :
+                   /^(png|jpg|jpeg|gif|svg)$/.test(ext) ? 'ph-image' :
+                   /^(xlsx?|csv)$/.test(ext) ? 'ph-table' :
+                   /^(pdf)$/.test(ext) ? 'ph-file-pdf' : 'ph-file-arrow-down';
+      const card = document.createElement('div');
+      card.className = 'msg assistant';
+      card.innerHTML = `<div class="bubble"><a class="file-download-link" href="download/${encodeURIComponent(fname)}" target="_blank"><i class="ph ${icon}"></i> ${esc(fname)}</a></div>`;
+      messagesEl.appendChild(card);
+    }
+  }
+
+  scrollBottom();
+}
+
+// ── Markdown ──
+function renderMarkdown(text) {
+  text = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\((\/view\/[^)]+)\)/g, (_, label, href) => {
+      return `<a class="view-artifact-link" href="${href}" onclick="openArtifact('${label}', '${href}', 'iframe'); return false;"><i class="ph ph-eye"></i> ${label}</a>`;
+    })
+    .replace(/\[([^\]]+)\]\((download\/[^)]+)\)/g, (_, label, href) => {
+      const ext = href.split('.').pop().toLowerCase();
+      const icon = /^(mp4|webm|mov)$/.test(ext) ? 'ph-video' :
+                   /^(png|jpg|jpeg|gif|svg)$/.test(ext) ? 'ph-image' :
+                   /^(xlsx?|csv)$/.test(ext) ? 'ph-table' :
+                   /^(pdf)$/.test(ext) ? 'ph-file-pdf' : 'ph-file-arrow-down';
+      return `<a class="file-download-link" href="${href}" target="_blank"><i class="ph ${icon}"></i> ${label}</a>`;
+    });
+  // Convert /app/files/ paths to download links
+  text = text.replace(/\/app\/files\/([^\s<,)]+)/g, (match, fname) => {
+    const icon = /\.(mp4|webm|mov)$/i.test(fname) ? 'ph-video' :
+                 /\.(png|jpg|jpeg|gif|svg)$/i.test(fname) ? 'ph-image' :
+                 /\.(xlsx?|csv)$/i.test(fname) ? 'ph-table' : 'ph-file-arrow-down';
+    return `<a class="file-download-link" href="download/${encodeURIComponent(fname)}" target="_blank"><i class="ph ${icon}"></i>${fname}</a>`;
+  });
+  text = '<p>' + text.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+  return text.replace(/<p>\s*<\/p>/g, '');
+}
+
+// ── Submit ──
+async function submit() {
+  const text = inputEl.value.trim();
+  if (!text || busy) return;
+
+  busy = true;
+  document.getElementById('btn-send').disabled = true;
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  history.push({ role: 'user', content: text });
+  addMsg('user', esc(text));
+  addLoading();
+
+  try {
+    const resp = await fetch('chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history, model: getModel(), conversation_id: convId, mode: getMode() }),
+    });
+
+    removeLoading();
+
+    const bubble = addMsg('assistant', '');
+    bubble.classList.add('cursor');
+    let fullText = '';
+    let costUsd = null;
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'text') {
+            fullText += ev.text;
+            bubble.innerHTML = renderMarkdown(fullText);
+            scrollBottom();
+          } else if (ev.type === 'tool_use') {
+            addToolBlock(ev.name, ev.input, ev.result);
+            if (ev.name === 'store_memory') setTimeout(loadMemory, 400);
+          } else if (ev.type === 'done') {
+            costUsd = ev.cost_usd;
+            loadConversations();
+          } else if (ev.type === 'error') {
+            bubble.innerHTML = `<em style="color:var(--danger)">Error: ${esc(ev.detail)}</em>`;
+          }
+        } catch {}
+      }
+    }
+
+    bubble.classList.remove('cursor');
+    bubble._rawText = fullText;
+    injectArtifactButtons(bubble);
+    history.push({ role: 'assistant', content: fullText });
+
+    // Cost meta line (shown when cost-toggle is on)
+    if (costUsd != null && typeof costUsd === 'number') {
+      const msgDiv = bubble.closest('.msg');
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      meta.textContent = `$${costUsd.toFixed(5)}`;
+      msgDiv.appendChild(meta);
+    }
+
+  } catch (err) {
+    removeLoading();
+    addMsg('assistant', `<em style="color:var(--danger)">Error: ${esc(err.message)}</em>`);
+  }
+
+  busy = false;
+  document.getElementById('btn-send').disabled = false;
+  inputEl.focus();
+}
+
+// ── File upload ──
+let pendingFiles = []; // [{filename, content}]
+
+async function uploadFile(input) {
+  for (const file of input.files) await uploadSingleFile(file);
+  input.value = '';
+}
+
+async function uploadSingleFile(file) {
+  const hint = document.getElementById('upload-hint');
+  hint.textContent = `Uploading ${file.name}…`;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const resp = await fetch('upload', { method: 'POST', body: form });
+    const data = await resp.json();
+    if (resp.ok) {
+      hint.textContent = '';
+      loadFiles();
+      const r2 = await fetch(`read-file/${encodeURIComponent(data.filename)}`);
+      const d2 = await r2.json();
+      const content = d2.content || '';
+      loadFiles();
+
+      // Show file preview in artifacts pane
+      const ext = data.filename.split('.').pop().toLowerCase();
+      const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'];
+      const codeExts = ['py', 'js', 'ts', 'jsx', 'tsx', 'java', 'c', 'cpp', 'h', 'rs', 'go', 'rb', 'php', 'sh', 'bash', 'sql', 'r', 'yml', 'yaml', 'toml'];
+      const mdExts = ['md', 'markdown'];
+      if (ext === 'xlsx' || ext === 'xls') {
+        // Fetch structured Excel data
+        try {
+          const exR = await fetch(`read-excel/${encodeURIComponent(data.filename)}`);
+          const exD = await exR.json();
+          if (exD.sheets && exD.sheets.length) openArtifact(data.filename, exD.sheets, 'excel');
+          else openArtifact(data.filename, content, 'text');
+        } catch { openArtifact(data.filename, content, 'text'); }
+      } else if (ext === 'csv') openArtifact(data.filename, content, 'csv');
+      else if (ext === 'html' || ext === 'htm') openArtifact(data.filename, content, 'html');
+      else if (ext === 'pptx') {
+        try {
+          const pptxR = await fetch(`render-pptx/${encodeURIComponent(data.filename)}`);
+          const pptxD = await pptxR.json();
+          openArtifact(data.filename, pptxD.html, 'html');
+        } catch { /* fall through to text */ }
+      }
+      else if (ext === 'svg') openArtifact(data.filename, content, 'svg');
+      else if (imgExts.includes(ext)) openArtifact(data.filename, `download/${encodeURIComponent(data.filename)}`, 'image');
+      else if (codeExts.includes(ext)) openArtifact(data.filename, content, 'code', ext);
+      else if (mdExts.includes(ext)) openArtifact(data.filename, content, 'markdown');
+      else openArtifact(data.filename, content, 'text');
+
+      // Auto-submit: show file added message and get a summary
+      const displayMsg = `📎 ${data.filename} added`;
+      let pptxText = '';
+      if (ext === 'pptx') {
+        try {
+          const pptxR2 = await fetch(`render-pptx/${encodeURIComponent(data.filename)}`);
+          const pptxD2 = await pptxR2.json();
+          pptxText = pptxD2.text || '';
+        } catch {}
+      }
+      const fullContent = ext === 'pptx'
+        ? `I uploaded ${data.filename} — rendered in the artifacts pane.\n\nSlide text:\n${pptxText}`
+        : (ext === 'html' || ext === 'htm')
+        ? `I uploaded ${data.filename} — rendered as HTML in the artifacts pane.`
+        : `<document filename="${data.filename}">
+${content}
+</document>
+
+Briefly summarise the contents of this file.`;
+      hideWelcome();
+      history.push({ role: 'user', content: fullContent });
+      addMsg('user', esc(displayMsg));
+      addLoading();
+
+      const resp2 = await fetch('chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history, model: getModel(), conversation_id: convId, mode: getMode() }),
+      });
+      removeLoading();
+      const bubble = addMsg('assistant', '');
+      bubble.classList.add('cursor');
+      let fullText = '';
+      const reader = resp2.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'text') { fullText += ev.text; bubble.innerHTML = renderMarkdown(fullText); scrollBottom(); }
+          } catch {}
+        }
+      }
+      bubble.classList.remove('cursor');
+      bubble._rawText = fullText;
+      injectArtifactButtons(bubble);
+      history.push({ role: 'assistant', content: fullText });
+
+    } else {
+      hint.textContent = `Error: ${data.detail || 'upload failed'}`;
+      setTimeout(() => { hint.textContent = ''; }, 4000);
+    }
+  } catch (err) {
+    hint.textContent = `Error: ${err.message}`;
+    setTimeout(() => { hint.textContent = ''; }, 4000);
+  }
+}
+
+function addFileChip(filename) {
+  const chips = document.getElementById('file-chips');
+  const chip = document.createElement('div');
+  chip.className = 'file-chip';
+  chip.dataset.filename = filename;
+  chip.innerHTML = `<i class="ph ph-paperclip"></i><span style="overflow:hidden;text-overflow:ellipsis;">${esc(filename)}</span><button class="file-chip-remove" onclick="removeChip(this)" title="Remove">×</button>`;
+  chips.appendChild(chip);
+}
+
+function removeChip(btn) {
+  const chip = btn.closest('.file-chip');
+  const filename = chip.dataset.filename;
+  pendingFiles = pendingFiles.filter(f => f.filename !== filename);
+  chip.remove();
+}
+
+function clearChips() {
+  pendingFiles = [];
+  document.getElementById('file-chips').innerHTML = '';
+}
+
+// ── Drag and drop onto input area ──
+const _inputArea = document.getElementById('input-area');
+_inputArea.addEventListener('dragover', e => { e.preventDefault(); _inputArea.style.outline = '2px dashed var(--accent)'; });
+_inputArea.addEventListener('dragleave', () => { _inputArea.style.outline = ''; });
+_inputArea.addEventListener('drop', e => {
+  e.preventDefault();
+  _inputArea.style.outline = '';
+  Array.from(e.dataTransfer.files).forEach(uploadSingleFile);
+});
+
+// ── Artifacts ──
+let _artifacts = []; // [{title, type, content}]
+let _activeArtifact = -1;
+
+function isMobileView() {
+  return window.matchMedia('(max-width: 899px)').matches;
+}
+
+function toggleArtifacts() {
+  const app = document.getElementById('app');
+  const btn = document.getElementById('btn-artifacts');
+  if (isMobileView()) {
+    const open = app.classList.toggle('artifact-sheet-open');
+    app.classList.toggle('artifacts-open', open);
+    btn.classList.toggle('active', open);
+  } else {
+    const open = app.classList.toggle('artifacts-open');
+    btn.classList.toggle('active', open);
+    document.getElementById('resize-artifacts').style.display = open ? '' : 'none';
+  }
+}
+
+function closeArtifacts() {
+  const app = document.getElementById('app');
+  app.classList.remove('artifacts-open');
+  app.classList.remove('artifact-sheet-open');
+  document.getElementById('btn-artifacts').classList.remove('active');
+  const resizer = document.getElementById('resize-artifacts');
+  if (resizer) resizer.style.display = 'none';
+}
+
+// Mobile: tap the sheet header to expand/collapse
+document.addEventListener('DOMContentLoaded', () => {
+  const header = document.getElementById('artifacts-header');
+  if (!header) return;
+  header.addEventListener('click', e => {
+    if (!isMobileView()) return;
+    // Only treat taps on the header bar itself (not buttons inside) as sheet toggles
+    if (e.target.closest('button')) return;
+    const app = document.getElementById('app');
+    app.classList.toggle('artifact-sheet-open');
+  });
+});
+
+// ── Resize handles ──
+function initResize(handleId, leftSel, rightSel, minL, minR) {
+  const handle = document.getElementById(handleId);
+  if (!handle) return;
+  let dragging = false;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const left = document.querySelector(leftSel);
+    const right = document.querySelector(rightSel);
+    const onMove = e2 => {
+      if (!dragging) return;
+      const rect = left.parentElement.getBoundingClientRect();
+      const leftRect = left.getBoundingClientRect();
+      const rightEnd = right.getBoundingClientRect().right;
+      const newLeftW = e2.clientX - leftRect.left;
+      const newRightW = rightEnd - e2.clientX - 5;
+      if (newLeftW >= minL && newRightW >= minR) {
+        left.style.width = newLeftW + 'px';
+        left.style.flex = 'none';
+        right.style.width = newRightW + 'px';
+        right.style.flex = 'none';
+      }
+    };
+    const onUp = () => {
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+initResize('resize-artifacts', '#main', '#artifacts-panel', 300, 200);
+
+// Memory resize — left element depends on whether artifacts is open
+(function() {
+  const handle = document.getElementById('resize-memory');
+  if (!handle) return;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const mem = document.getElementById('memory-panel');
+    const left = document.getElementById('app').classList.contains('artifacts-open')
+      ? document.getElementById('artifacts-panel')
+      : document.getElementById('main');
+    const onMove = e2 => {
+      const leftRect = left.getBoundingClientRect();
+      const memRight = mem.getBoundingClientRect().right;
+      const newLeftW = e2.clientX - leftRect.left;
+      const newMemW = memRight - e2.clientX - 5;
+      if (newLeftW >= 200 && newMemW >= 150) {
+        left.style.width = newLeftW + 'px';
+        left.style.flex = 'none';
+        mem.style.width = newMemW + 'px';
+      }
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+let _artifactOrientation = 'portrait';
+
+function applyArtifactOrientation(orient) {
+  _artifactOrientation = orient;
+  const app = document.getElementById('app');
+  app.classList.remove('artifact-portrait', 'artifact-landscape');
+  app.classList.add('artifact-' + orient);
+  const btn = document.getElementById('btn-artifact-orient');
+  if (!btn) return;
+  const icon = btn.querySelector('i');
+  if (orient === 'landscape') {
+    icon.className = 'ph ph-arrows-out-line-vertical';
+    btn.title = 'Switch to portrait';
+  } else {
+    icon.className = 'ph ph-arrows-out-line-horizontal';
+    btn.title = 'Switch to landscape';
+  }
+}
+
+function toggleArtifactOrientation() {
+  applyArtifactOrientation(_artifactOrientation === 'portrait' ? 'landscape' : 'portrait');
+}
+
+function openArtifact(title, content, type = 'html', lang = '') {
+  // Auto-detect orientation: tables → landscape, iframe URLs → landscape for tables/maps, else portrait
+  const orient = (type === 'iframe' || /<table[\s>]/i.test(content)) ? 'landscape' : 'portrait';
+  applyArtifactOrientation(orient);
+
+  // Deduplicate by title
+  const existing = _artifacts.findIndex(a => a.title === title);
+  if (existing >= 0) {
+    _artifacts[existing] = { title, content, type, lang };
+    setActiveArtifact(existing);
+  } else {
+    _artifacts.push({ title, content, type, lang });
+    setActiveArtifact(_artifacts.length - 1);
+  }
+  renderArtifactTabs();
+  renderActiveArtifact();
+  // Open the pane if not already open
+  document.getElementById('app').classList.add('artifacts-open');
+  document.getElementById('btn-artifacts').classList.add('active');
+  document.getElementById('resize-artifacts').style.display = '';
+}
+
+function setActiveArtifact(idx) {
+  _activeArtifact = idx;
+}
+
+function renderArtifactTabs() {
+  const tabs = document.getElementById('artifacts-tabs');
+  tabs.innerHTML = '';
+  _artifacts.forEach((a, i) => {
+    const tab = document.createElement('button');
+    tab.className = 'artifact-tab' + (i === _activeArtifact ? ' active' : '');
+    tab.textContent = a.title;
+    tab.title = a.title;
+    const isPersonal = /^\[PERSONAL\]|personal/i.test(a.title);
+    tab.setAttribute('data-personal', isPersonal);
+    tab.onclick = () => { setActiveArtifact(i); renderArtifactTabs(); renderActiveArtifact(); };
+    tabs.appendChild(tab);
+  });
+}
+
+function renderActiveArtifact() {
+  const content = document.getElementById('artifacts-content');
+  const empty = document.getElementById('artifacts-empty');
+  const title = document.getElementById('artifacts-title');
+  if (_activeArtifact < 0 || !_artifacts[_activeArtifact]) {
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  const a = _artifacts[_activeArtifact];
+  title.textContent = a.title;
+  // Show/hide download button
+  document.getElementById('btn-artifact-download').style.display = '';
+  // Remove previous render
+  content.querySelectorAll('iframe, .artifact-text, .artifact-table-wrap, .artifact-image, .artifact-code, .artifact-markdown, .artifact-excel').forEach(el => el.remove());
+
+  if (a.type === 'iframe') {
+    const iframe = document.createElement('iframe');
+    iframe.src = a.content; // a.content is the URL e.g. /view/table.html
+    content.appendChild(iframe);
+  } else if (a.type === 'html' || a.type === 'svg') {
+    const iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-scripts allow-same-origin';
+    // Inject window.API_BASE so map artifacts can fetch from the PostGIS endpoint
+    const apiBase = (() => {
+      const p = window.location.pathname.replace(/\/?$/, '/');
+      return window.location.origin + p;
+    })();
+    const apiScript = `<script>window.API_BASE=${JSON.stringify(apiBase)};<\/script>`;
+    const injected = a.content.includes('<head>')
+      ? a.content.replace('<head>', '<head>' + apiScript)
+      : apiScript + a.content;
+    const blob = new Blob([injected], { type: 'text/html' });
+    iframe.src = URL.createObjectURL(blob);
+    iframe.onload = () => URL.revokeObjectURL(iframe.src);
+    content.appendChild(iframe);
+  } else if (a.type === 'csv') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artifact-table-wrap';
+    wrap.innerHTML = csvToTable(a.content);
+    content.appendChild(wrap);
+  } else if (a.type === 'excel') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artifact-excel';
+    wrap.innerHTML = excelToTabs(a.content);
+    // Wire up sheet tabs
+    wrap.querySelectorAll('.sheet-tab').forEach(tab => {
+      tab.onclick = () => {
+        wrap.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+        wrap.querySelectorAll('.sheet-body').forEach(b => b.style.display = 'none');
+        tab.classList.add('active');
+        wrap.querySelector(`.sheet-body[data-sheet="${tab.dataset.sheet}"]`).style.display = '';
+      };
+    });
+    content.appendChild(wrap);
+  } else if (a.type === 'image') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artifact-image';
+    const img = document.createElement('img');
+    img.src = a.content;
+    img.alt = a.title;
+    img.onerror = () => { wrap.innerHTML = '<div style="color:var(--text-dim);">Failed to load image</div>'; };
+    wrap.appendChild(img);
+    content.appendChild(wrap);
+  } else if (a.type === 'code') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artifact-code';
+    wrap.innerHTML = highlightCode(a.content, a.lang || '');
+    content.appendChild(wrap);
+  } else if (a.type === 'markdown') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artifact-markdown';
+    wrap.innerHTML = renderMarkdown(a.content);
+    content.appendChild(wrap);
+  } else {
+    const pre = document.createElement('div');
+    pre.className = 'artifact-text';
+    pre.textContent = a.content;
+    content.appendChild(pre);
+  }
+}
+
+function highlightCode(code, lang) {
+  const lines = code.split('\n');
+  const kwSets = {
+    py: /\b(def|class|import|from|return|if|elif|else|for|while|try|except|finally|with|as|yield|raise|pass|break|continue|and|or|not|in|is|None|True|False|lambda|async|await)\b/g,
+    js: /\b(function|const|let|var|return|if|else|for|while|switch|case|break|continue|class|import|export|from|default|new|this|try|catch|finally|throw|async|await|yield|typeof|instanceof|null|undefined|true|false|of|in)\b/g,
+    sql: /\b(SELECT|FROM|WHERE|AND|OR|NOT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INTO|VALUES|SET|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|DISTINCT|UNION|LIKE|IN|IS|NULL|COUNT|SUM|AVG|MIN|MAX|CASE|WHEN|THEN|ELSE|END|EXISTS|BETWEEN)\b/gi,
+    r: /\b(function|if|else|for|while|repeat|return|library|require|TRUE|FALSE|NULL|NA|NaN|Inf|in|next|break)\b/g,
+  };
+  // Map aliases
+  const langMap = { ts: 'js', tsx: 'js', jsx: 'js', python: 'py', javascript: 'js', typescript: 'js', bash: 'sh', shell: 'sh', yaml: 'py', yml: 'py', go: 'js', rs: 'js', java: 'js', cpp: 'js', c: 'js', php: 'js', rb: 'py' };
+  const resolved = langMap[lang] || lang;
+  const kwRe = kwSets[resolved];
+
+  return lines.map((line, i) => {
+    let h = esc(line);
+    // Comments (single-line)
+    h = h.replace(/(\/\/.*$|#.*$|--.*$)/gm, '<span class="cm">$1</span>');
+    // Strings
+    h = h.replace(/(&quot;[^&]*?&quot;|&#39;[^&]*?&#39;|`[^`]*?`)/g, '<span class="str">$1</span>');
+    // Numbers
+    h = h.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+    // Keywords
+    if (kwRe) {
+      kwRe.lastIndex = 0;
+      h = h.replace(kwRe, '<span class="kw">$1</span>');
+    }
+    // Function calls
+    h = h.replace(/\b([a-zA-Z_]\w*)\s*\(/g, '<span class="fn">$1</span>(');
+    return `<span class="ln">${i + 1}</span>${h}`;
+  }).join('\n');
+}
+
+function csvToTable(csv) {
+  const lines = csv.trim().split('\n');
+  if (!lines.length) return '<em>Empty file</em>';
+  // Auto-detect delimiter: tab, comma, or pipe
+  const delim = lines[0].includes('\t') ? '\t' : lines[0].includes('|') ? '|' : ',';
+  const parse = line => {
+    if (delim === ',') return csvParseLine(line);
+    return line.split(delim).map(c => c.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+  };
+  const headers = parse(lines[0]);
+  const rows = lines.slice(1).filter(l => l.trim()).map(parse);
+  const th = headers.map(h => `<th>${esc(h)}</th>`).join('');
+  const trs = rows.map(r => `<tr>${r.map(c => `<td title="${esc(c)}">${esc(c)}</td>`).join('')}</tr>`).join('');
+  return `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">${headers.length} columns, ${rows.length} rows</div><table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+// Proper CSV line parser that handles quoted fields with commas inside
+function csvParseLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function excelToTabs(sheets) {
+  if (!sheets || !sheets.length) return '<em>No data</em>';
+  let tabsHtml = '<div class="sheet-tabs">';
+  let bodiesHtml = '';
+  sheets.forEach((s, i) => {
+    tabsHtml += `<button class="sheet-tab${i === 0 ? ' active' : ''}" data-sheet="${i}">${esc(s.name)}</button>`;
+    const th = s.headers.map(h => `<th>${esc(h)}</th>`).join('');
+    const trs = s.rows.map(r => `<tr>${r.map(c => `<td title="${esc(c)}">${esc(c)}</td>`).join('')}</tr>`).join('');
+    bodiesHtml += `<div class="sheet-body" data-sheet="${i}" style="${i > 0 ? 'display:none;' : ''}">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">${s.headers.length} columns, ${s.rows.length} rows</div>
+      <table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>
+    </div>`;
+  });
+  tabsHtml += '</div>';
+  return tabsHtml + bodiesHtml;
+}
+
+function downloadArtifact() {
+  if (_activeArtifact < 0 || !_artifacts[_activeArtifact]) return;
+  const a = _artifacts[_activeArtifact];
+  // If it's an uploaded file, link to download endpoint
+  const isUploadedFile = !a.title.includes(' ') || a.title.includes('.');
+  if (isUploadedFile && (a.type === 'excel' || a.type === 'image')) {
+    const name = a.type === 'image' ? a.content.replace('download/', '') : a.title;
+    window.open(`download/${encodeURIComponent(name)}`, '_blank');
+    return;
+  }
+  // Otherwise generate a blob download
+  let content, mime, ext;
+  if (a.type === 'csv') {
+    content = a.content; mime = 'text/csv'; ext = 'csv';
+  } else if (a.type === 'html' || a.type === 'svg') {
+    content = a.content; mime = 'text/html'; ext = a.type === 'svg' ? 'svg' : 'html';
+  } else if (a.type === 'code') {
+    content = a.content; mime = 'text/plain'; ext = a.lang || 'txt';
+  } else if (a.type === 'markdown') {
+    content = a.content; mime = 'text/markdown'; ext = 'md';
+  } else if (a.type === 'excel') {
+    // For generated excel artifacts, export first sheet as CSV
+    const s = a.content[0];
+    content = [s.headers.join(','), ...s.rows.map(r => r.map(c => c.includes(',') ? `"${c}"` : c).join(','))].join('\n');
+    mime = 'text/csv'; ext = 'csv';
+  } else {
+    content = a.content; mime = 'text/plain'; ext = 'txt';
+  }
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = a.title.replace(/[^a-zA-Z0-9._-]/g, '_') + (a.title.includes('.') ? '' : '.' + ext);
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// Detect and inject artifact buttons into rendered markdown
+// HTML artifacts containing 'leaflet' are auto-opened as maps
+function injectArtifactButtons(bubble) {
+  const raw = bubble._rawText || '';
+  const fenceRe = /```(\w+)([\s\S]*?)```/gi;
+  let m;
+  while ((m = fenceRe.exec(raw)) !== null) {
+    const lang = m[1].toLowerCase();
+    const code = m[2].trim();
+    // Determine artifact type from language
+    let type = 'code', label = lang.toUpperCase();
+    if (lang === 'html' || lang === 'htm') { type = 'html'; }
+    else if (lang === 'svg') { type = 'svg'; }
+    else if (lang === 'csv') { type = 'csv'; }
+    else if (lang === 'markdown' || lang === 'md') { type = 'markdown'; label = 'Markdown'; }
+
+    const isMap = type === 'html' && /leaflet/i.test(code);
+    const artifactTitle = isMap
+      ? ('Map ' + new Date().toLocaleTimeString())
+      : (label + ' ' + new Date().toLocaleTimeString());
+
+    if (isMap) {
+      // Auto-open maps immediately
+      openArtifact(artifactTitle, code, type, lang);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'artifact-open-btn';
+      btn.innerHTML = `<i class="ph ph-squares-four"></i> Open in Artifacts`;
+      btn.onclick = () => openArtifact(artifactTitle, code, type, lang);
+      bubble.appendChild(btn);
+    }
+  }
+}
+
+// ── Memory panel ──
+let _allMemories = [];
+
+async function loadMemory() {
+  try {
+    const r = await fetch('admin/memory');
+    const data = await r.json();
+    _allMemories = data.memory || [];
+    filterMemories();
+  } catch {}
+}
+
+function filterMemories() {
+  const q = (document.getElementById('memory-search')?.value || '').toLowerCase();
+  const filtered = q ? _allMemories.filter(m =>
+    m.key.toLowerCase().includes(q) || m.value.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)
+  ) : _allMemories;
+  renderMemory(filtered);
+}
+
+function renderMemory(items) {
+  const body = document.getElementById('memory-body');
+  const countEl = document.getElementById('memory-count');
+  countEl.textContent = items.length;
+
+  if (!items.length) {
+    body.innerHTML = '<div class="memory-empty"><i class="ph ph-brain"></i>No memories yet.<br>Chat to get started.</div>';
+    return;
+  }
+
+  const cats = {};
+  for (const m of items) (cats[m.category] = cats[m.category] || []).push(m);
+
+  let html = '';
+  for (const [cat, mems] of Object.entries(cats)) {
+    html += `<div class="memory-cat-label">${cat}</div>`;
+    for (const m of mems) {
+      const isPersonal = /^\[PERSONAL\]|personal/i.test(m.key + ' ' + m.value);
+      html += `<div class="memory-item" data-personal="${isPersonal}">
+        <div class="memory-key">${esc(m.key)}</div>
+        <div class="memory-value">${esc(m.value)}</div>
+        <div class="memory-footer">
+          <button class="memory-delete" onclick="deleteMemory('${esc(m.key)}')" title="Forget"><i class="ph ph-trash"></i></button>
+        </div>
+      </div>`;
+    }
+  }
+  body.innerHTML = html;
+}
+
+async function deleteMemory(key) {
+  await fetch(`admin/memory/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  loadMemory();
+}
+
+async function loadFiles() {
+  try {
+    const r = await fetch('admin/files');
+    const data = await r.json();
+    renderFiles(data.files || []);
+  } catch {}
+}
+
+const FILE_ICONS = { pdf:'ph-file-pdf', docx:'ph-file-doc', doc:'ph-file-doc', txt:'ph-file-text', md:'ph-file-text', csv:'ph-table', json:'ph-code' };
+
+function renderFiles(files) {
+  const list = document.getElementById('files-list');
+  const empty = document.getElementById('files-empty');
+  if (!files.length) {
+    if (empty) empty.style.display = '';
+    list.querySelectorAll('.file-entry').forEach(el => el.remove());
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  list.querySelectorAll('.file-entry').forEach(el => el.remove());
+  for (const f of files) {
+    const ext = (f.ext || f.name.split('.').pop()).toLowerCase();
+    const icon = FILE_ICONS[ext] || 'ph-file';
+    const div = document.createElement('div');
+    div.className = 'file-entry';
+    div.innerHTML = `<i class="ph ${icon}"></i><a href="download/${encodeURIComponent(f.name)}" target="_blank" style="color:inherit;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(f.name)}">${esc(f.name)}</a><span style="font-size:10px;color:var(--text-dim);flex-shrink:0;">${f.size_kb}KB</span>`;
+    list.appendChild(div);
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Init ──
+document.getElementById('btn-memory-toggle').classList.add('active');
+loadMemory();
+loadFiles();
+
+// Load work mode from localStorage
+const workModeEnabled = localStorage.getItem('gis-work-mode') === '1';
+if (workModeEnabled) {
+  document.getElementById('work-mode-toggle').checked = true;
+  document.body.classList.add('work-mode');
+}
+
+// ── Sidebar (chat history) ──
+function toggleSidebar() {
+  const app = document.getElementById('app');
+  const btn = document.getElementById('btn-sidebar-toggle');
+  const hidden = app.classList.toggle('sidebar-hidden');
+  btn.classList.toggle('active', !hidden);
+  if (!hidden) loadConversations();
+}
+
+function relativeDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return d.toLocaleDateString();
+}
+
+async function loadConversations() {
+  const list = document.getElementById('sidebar-list');
+  if (!list) return;
+  try {
+    const res = await fetch('/conversations');
+    if (!res.ok) return;
+    const data = await res.json();
+    const convs = data.conversations || [];
+    if (!convs.length) {
+      list.innerHTML = '<div id="sidebar-empty">No previous chats.</div>';
+      return;
+    }
+    list.innerHTML = convs.map(c => {
+      const title = c.title || (c.preview ? c.preview.slice(0, 40) : 'Untitled chat');
+      const date = relativeDate(c.updated_at || c.created_at);
+      const active = c.id === convId ? ' active' : '';
+      return `<div class="sidebar-item${active}" onclick="loadConversation('${esc(c.id)}')" title="${esc(title)}">
+        ${esc(title)}
+        <span class="sidebar-item-date">${date}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { /* silent */ }
+}
+
+async function loadConversation(id) {
+  if (id === convId) return;
+  try {
+    const res = await fetch('/history/' + encodeURIComponent(id));
+    if (!res.ok) return;
+    const data = await res.json();
+    const msgs = data.messages || [];
+    // Switch conversation
+    convId = id;
+    localStorage.setItem('design_conv_id', id);
+    history = msgs.map(m => ({ role: m.role, content: m.content }));
+    // Re-render
+    messagesEl.innerHTML = '';
+    hideWelcome();
+    for (const m of msgs) {
+      if (m.role === 'user') addMsg('user', esc(m.content));
+      else if (m.role === 'assistant') addMsg('assistant', renderMarkdown(m.content || ''));
+    }
+    scrollBottom();
+    // Highlight active in sidebar
+    document.querySelectorAll('.sidebar-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('onclick') === `loadConversation('${id}')`);
+    });
+  } catch(e) {
+    showToast('Failed to load chat');
+  }
+}
+
+function newConversation() {
+  history = [];
+  messagesEl.innerHTML = '';
+  convId = newConvId();
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.style.display = '';
+  loadConversations();
+}
+
+// Init sidebar on load — restore last conversation if one exists
+loadConversations().then(() => {
+  if (localStorage.getItem('design_conv_id')) loadConversation(convId);
+});
+
+// ── Browser mode ──────────────────────────────────────────────────────────────
+const _NOVNC_URL  = `http://${window.location.hostname}:8121/vnc_lite.html?autoconnect=1&resize=scale&quality=6&compression=2`;
+const _NAV_URL    = `http://${window.location.hostname}:8122/navigate`;
+let _browserMode  = false;
+
+function toggleBrowserMode() {
+  _browserMode ? exitBrowserMode() : enterBrowserMode();
+}
+
+function enterBrowserMode() {
+  _browserMode = true;
+  document.getElementById('artifacts-header-icon').className = 'ph ph-globe';
+  document.getElementById('artifacts-title').textContent = 'Browser';
+  document.getElementById('browser-url-bar').style.display = 'flex';
+  document.getElementById('artifacts-tabs').style.display = 'none';
+  document.getElementById('artifacts-content').style.display = 'none';
+  const frame = document.getElementById('browser-frame');
+  frame.removeAttribute('sandbox');
+  frame.style.display = 'flex';
+  document.getElementById('btn-browser-toggle').querySelector('i').className = 'ph ph-squares-four';
+  document.getElementById('btn-browser-toggle').title = 'Back to artifacts';
+  document.getElementById('app').classList.add('artifacts-open');
+  document.getElementById('btn-artifacts').classList.add('active');
+  document.getElementById('resize-artifacts').style.display = '';
+  applyArtifactOrientation('landscape');
+}
+
+function exitBrowserMode() {
+  _browserMode = false;
+  document.getElementById('artifacts-header-icon').className = 'ph ph-squares-four';
+  document.getElementById('artifacts-title').textContent = 'Artifacts';
+  document.getElementById('browser-url-bar').style.display = 'none';
+  document.getElementById('artifacts-tabs').style.display = '';
+  document.getElementById('artifacts-content').style.display = '';
+  const frame = document.getElementById('browser-frame');
+  frame.style.display = 'none';
+  frame.src = '';
+  document.getElementById('btn-browser-toggle').querySelector('i').className = 'ph ph-globe';
+  document.getElementById('btn-browser-toggle').title = 'Open URL preview';
+}
+
+function closeArtifactsAll() {
+  exitBrowserMode();
+  closeArtifacts();
+}
+
+function browserGo() {
+  let url = document.getElementById('browser-url-input').value.trim();
+  if (!url) return;
+  // /view/ and relative paths: load directly
+  if (url.startsWith('/')) {
+    document.getElementById('browser-frame').src = url;
+    return;
+  }
+  if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+  document.getElementById('browser-url-input').value = url;
+  // localhost / private IPs: load directly (no X-Frame issues)
+  const isLocal = /^https?:\/\/(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url);
+  const src = isLocal ? url : `/proxy?url=${encodeURIComponent(url)}`;
+  document.getElementById('browser-frame').src = src;
+}
+
+document.getElementById('browser-url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') browserGo();
+});
+
+// ── Sidebar tab switcher ──────────────────────────────────────────────────────
+function showSidebarTab(tab) {
+  document.getElementById('sidebar-tab-history').classList.toggle('active', tab === 'history');
+  document.getElementById('sidebar-tab-library').classList.toggle('active', tab === 'library');
+  document.getElementById('sidebar-history').style.display = tab === 'history' ? '' : 'none';
+  document.getElementById('sidebar-library').style.display = tab === 'library' ? '' : 'none';
+  if (tab === 'library') loadLibrary();
+}
+
+// ── Library panel ─────────────────────────────────────────────────────────────
+const GIS_BASE = `http://${window.location.hostname}:8130`;
+let _libraryLoaded = false;
+
+function _libItem(icon, label, onclick) {
+  const div = document.createElement('div');
+  div.className = 'lib-item';
+  div.title = label;
+  div.innerHTML = `<i class="ph ${icon}"></i><span class="lib-item-name">${esc(label)}</span>`;
+  div.onclick = onclick;
+  return div;
+}
+
+function _libSection(iconClass, title) {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `<div class="lib-section-title"><i class="ph ${iconClass}"></i>${title}</div>`;
+  return wrap;
+}
+
+async function loadLibrary() {
+  if (_libraryLoaded) return;
+  const lib = document.getElementById('sidebar-library');
+  if (!lib) return;
+  lib.innerHTML = '<div class="lib-loading">Loading…</div>';
+
+  // Fetch GIS clients
+  let clients = [];
+  try {
+    const token = localStorage.getItem('codex_admin_token') || 'dev-token-change-me';
+    const r = await fetch(`${GIS_BASE}/admin/clients`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (r.ok) clients = (await r.json()).filter(c => c.active);
+  } catch {}
+
+  // Fetch files list
+  let files = [];
+  try {
+    const r = await fetch('admin/files');
+    files = (await r.json()).files || [];
+  } catch {}
+
+  lib.innerHTML = '';
+
+  // ── Maps ──
+  const mapsWrap = _libSection('ph-map-pin', 'Maps');
+  for (const c of clients) {
+    mapsWrap.appendChild(_libItem('ph-map-trifold', c.name, () =>
+      openArtifact(c.name + ' Map', `${GIS_BASE}/maps/${c.id}`, 'iframe')
+    ));
+  }
+  mapsWrap.appendChild(_libItem('ph-tree', 'Agritourism Trail', () =>
+    openArtifact('Agritourism Trail', `${GIS_BASE}/agritourism`, 'iframe')
+  ));
+  lib.appendChild(mapsWrap);
+
+  // ── Reports ──
+  const mdFiles = files.filter(f => /\.md$/i.test(f.name) && f.name !== 'project-readme.md' && f.name !== 'project-tasks.md');
+  if (mdFiles.length) {
+    const repWrap = _libSection('ph-file-text', 'Reports');
+    for (const f of mdFiles) {
+      const label = f.name
+        .replace(/^research-/, '')
+        .replace(/[-_]/g, ' ')
+        .replace(/\.md$/i, '')
+        .replace(/\b\w/g, l => l.toUpperCase());
+      repWrap.appendChild(_libItem('ph-file-text', label, () => openLibraryMd(label, f.name)));
+    }
+    lib.appendChild(repWrap);
+  }
+
+  // ── Brand & Design ──
+  const htmlFiles = files.filter(f => /\.(html?|htm)$/i.test(f.name));
+  if (htmlFiles.length) {
+    const brandWrap = _libSection('ph-palette', 'Brand & Design');
+    for (const f of htmlFiles) {
+      const label = f.name
+        .replace(/-/g, ' ')
+        .replace(/\.(html?|htm)$/i, '')
+        .replace(/\b\w/g, l => l.toUpperCase());
+      const icon = f.name.includes('map') ? 'ph-map-trifold' : 'ph-layout';
+      brandWrap.appendChild(_libItem(icon, label, () => openLibraryHtml(label, f.name)));
+    }
+    lib.appendChild(brandWrap);
+  }
+
+  // ── GIS Admin ──
+  const adminWrap = _libSection('ph-gear', 'GIS Admin');
+  adminWrap.appendChild(_libItem('ph-users', 'Client Manager', () =>
+    openArtifact('GIS Client Manager', `${GIS_BASE}/admin`, 'iframe')
+  ));
+  lib.appendChild(adminWrap);
+
+  _libraryLoaded = true;
+}
+
+async function openLibraryMd(label, filename) {
+  try {
+    const r = await fetch(`download/${encodeURIComponent(filename)}`);
+    if (!r.ok) throw new Error(r.statusText);
+    openArtifact(label, await r.text(), 'markdown');
+  } catch { showToast('Could not load ' + filename); }
+}
+
+async function openLibraryHtml(label, filename) {
+  try {
+    const r = await fetch(`download/${encodeURIComponent(filename)}`);
+    if (!r.ok) throw new Error(r.statusText);
+    openArtifact(label, await r.text(), 'html');
+  } catch { showToast('Could not load ' + filename); }
+}
+
+function toggleVersion(cb) {
+  document.getElementById('chat-header').classList.toggle('hide-version', !cb.checked);
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

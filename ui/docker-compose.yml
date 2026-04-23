@@ -1,0 +1,43 @@
+networks:
+  codex-internal:
+    driver: bridge
+    internal: true
+  codex-egress:
+    driver: bridge
+
+services:
+  codex-ui:
+    build:
+      context: ./belle-api
+      dockerfile: Dockerfile
+    container_name: codex-ui
+    networks:
+      - codex-internal
+      - codex-egress
+    ports:
+      - "8132:8120"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: 8120
+      HOST: 0.0.0.0
+      DB_PATH: /app/data/codex.db
+      FILES_DIR: /app/files
+      SYSTEM_PROMPT_PATH: /app/instances/codex/system_prompt.txt
+      CODEX_BRIDGE_URL: http://host.docker.internal:8092
+      CODEX_BRIDGE_TOKEN: ${CODEX_BRIDGE_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DEFAULT_MODEL: gpt-5.4
+    env_file:
+      - .env
+    volumes:
+      - codex-ui-data:/app/data
+      - ./belle-api/files:/app/files
+      - ./belle-api/instances:/app/instances
+      - ./belle-api/static:/app/static
+    restart: unless-stopped
+
+volumes:
+  codex-ui-data:
+    driver: local
+    name: codex-ui_data
