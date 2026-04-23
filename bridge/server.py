@@ -17,7 +17,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 BRIDGE_TOKEN = os.environ["CODEX_BRIDGE_TOKEN"]         # F7: required, no default
 CODEX_BIN = os.environ.get("CODEX_BIN", "codex")
 DEFAULT_WORKSPACE = Path.home() / "projects" / "codex-drone"
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")   # F6: only this key injected
+OPENAI_API_KEY = os.environ.get("CODEX_API_KEY") or os.environ.get("OPENAI_API_KEY", "")  # CODEX_API_KEY takes precedence
 
 # F4: Allowlist of permitted project roots
 ALLOWED_ROOTS = [
@@ -158,13 +158,12 @@ async def chat(req: ChatRequest, request: Request,
     workspace = validate_workspace(req.project_dir)
     request_id = uuid.uuid4().hex[:8]
 
-    # F1: Profile selection
-    if req.model.startswith("codex"):
-        profile = "codex"
-    elif req.model == "gpt-5.4-mini":
-        profile = "mini"
-    else:
-        profile = "auto"
+    # Map model name; default to gpt-5.4
+    MODEL_MAP = {
+        "gpt-5.4-mini": "gpt-5.4-mini",
+        "codex-5.4":    "codex-5.4",
+    }
+    model_name = MODEL_MAP.get(req.model, "gpt-5.4")
 
     prompt = build_prompt(req.messages)
 
@@ -173,13 +172,13 @@ async def chat(req: ChatRequest, request: Request,
         "--json",
         "--full-auto",
         "--ephemeral",
-        "--profile", profile,
+        "-m", model_name,
         "--color", "never",
         "-C", workspace,
         prompt,
     ]
 
-    log.info(f"req={request_id} model={req.model} profile={profile} workspace={workspace}")
+    log.info(f"req={request_id} model={req.model} resolved={model_name} workspace={workspace}")
 
     async def stream():
         # F1: Acquire semaphore (concurrency limit)
@@ -191,7 +190,8 @@ async def chat(req: ChatRequest, request: Request,
                 env={                                    # F6/C-H1: fixed env, no inherited values
                     "PATH": "/usr/local/bin:/usr/bin:/bin",
                     "HOME": str(Path.home()),
-                    "OPENAI_API_KEY": OPENAI_API_KEY,
+                    "CODEX_API_KEY": OPENAI_API_KEY,    # Codex CLI auth uses CODEX_API_KEY
+                    "OPENAI_API_KEY": OPENAI_API_KEY,   # fallback for any REST calls
                     "NO_COLOR": "1",
                 },
                 start_new_session=True,  # F1: process group for clean kill
