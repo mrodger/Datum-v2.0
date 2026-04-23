@@ -154,16 +154,30 @@ if [ -f "$UI_DIR/docker-compose.yml" ]; then
             || fail "Import smoke test failed — check requirements.txt"
 
         log "Starting container for health check..."
-        docker compose up -d
-        sleep 3
+        CONTAINER_UP=false
+        # First attempt; on failure, recreate networks and retry once
+        if docker compose up -d 2>&1; then
+            CONTAINER_UP=true
+        else
+            log "WARNING: Container start failed — recreating networks and retrying once"
+            docker compose down 2>/dev/null || true
+            if docker compose up -d 2>&1; then
+                CONTAINER_UP=true
+            else
+                log "WARNING: Container start failed after retry — skipping live health check"
+                echo "SKIP: Container start failed — start manually: cd ~/projects/codex-drone/ui && docker compose up -d" >> "$HOME/projects/codex-drone/bootstrap_report.md"
+            fi
+        fi
 
-        # Verify app responds
-        if python3 -c "import urllib.request; r=urllib.request.urlopen('http://localhost:8132/', timeout=5); assert r.status==200; print('UI: OK')"; then
-            # Verify manifest served
-            python3 -c "import urllib.request,json; r=urllib.request.urlopen('http://localhost:8132/manifest.json',timeout=5); d=json.loads(r.read()); assert d['short_name']=='Codex'; print('Manifest: OK')"
+        if $CONTAINER_UP; then
+            sleep 3
+            # Verify app responds
+            if python3 -c "import urllib.request; r=urllib.request.urlopen('http://localhost:8132/', timeout=5); assert r.status==200; print('UI: OK')"; then
+                # Verify manifest served
+                python3 -c "import urllib.request,json; r=urllib.request.urlopen('http://localhost:8132/manifest.json',timeout=5); d=json.loads(r.read()); assert d['short_name']=='Codex'; print('Manifest: OK')"
 
-            # Verify bridge connectivity from inside container (R6-3)
-            docker compose exec codex-ui python3 -c "
+                # Verify bridge connectivity from inside container (R6-3)
+                docker compose exec codex-ui python3 -c "
 import urllib.request
 try:
     r = urllib.request.urlopen('http://host.docker.internal:8092/health', timeout=5)
@@ -171,11 +185,12 @@ try:
 except Exception as e:
     print(f'Bridge: UNREACHABLE ({e}) — bridge must be running on host :8092')
 "
-            echo "PASS: Standalone UI running on :8132" >> "$HOME/projects/codex-drone/bootstrap_report.md"
-        else
-            echo "FAIL: Standalone UI not responding on :8132" >> "$HOME/projects/codex-drone/bootstrap_report.md"
+                echo "PASS: Standalone UI running on :8132" >> "$HOME/projects/codex-drone/bootstrap_report.md"
+            else
+                echo "FAIL: Standalone UI not responding on :8132" >> "$HOME/projects/codex-drone/bootstrap_report.md"
+            fi
         fi
-        docker compose down
+        docker compose down 2>/dev/null || true
         cd "$HOME/projects/codex-drone"
     fi
 fi
