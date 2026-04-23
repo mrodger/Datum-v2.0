@@ -146,6 +146,9 @@ if [ -f "$UI_DIR/docker-compose.yml" ]; then
         docker compose build 2>&1 | tail -5
 
         # Import smoke test — catch missing deps before starting container
+        # Clean up any stale container from previous run (idempotent)
+        docker compose down --remove-orphans 2>/dev/null || true
+
         log "Import smoke test..."
         docker compose run --rm --no-deps codex-ui python3 -c "import server, agent, db; print('Imports: OK')" \
             || fail "Import smoke test failed — check requirements.txt"
