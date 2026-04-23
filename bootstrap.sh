@@ -22,7 +22,7 @@ for d in workspace tools scratch tasks memory/inbox memory/archive .codex bridge
     mkdir -p "$d"
 done
 
-VAULT_TARGET="${COEX_OBSIDIAN_VAULT:-$HOME/vault}"
+VAULT_TARGET="${CODEX_OBSIDIAN_VAULT:-$HOME/vault}"
 [ -d "$VAULT_TARGET" ] || fail "Vault not found at $VAULT_TARGET"
 
 for link in vault memory/curated; do
@@ -50,11 +50,16 @@ bash scripts/gen_gitignore.sh    > .gitignore
 bash scripts/gen_tools.sh
 bash scripts/gen_bridge.sh
 
-# ── Phase 2b pre-req: ensure bridge token exists before gen_codex_ui.sh needs it ──
+# ── Phase 2b pre-req: generate bridge token once, propagate to both .env files ──
 AGENTIC_ENV="$HOME/projects/agentic-ui/.env"
 if [ -f "$AGENTIC_ENV" ]; then
-    grep -q "CODEX_BRIDGE_TOKEN" "$AGENTIC_ENV" || echo "CODEX_BRIDGE_TOKEN=$(openssl rand -hex 16)" >> "$AGENTIC_ENV"
-    log "Bridge token ready in agentic-ui .env"
+    if ! grep -q "CODEX_BRIDGE_TOKEN" "$AGENTIC_ENV"; then
+        echo "CODEX_BRIDGE_TOKEN=$(openssl rand -hex 16)" >> "$AGENTIC_ENV"
+    fi
+    BRIDGE_TOKEN=$(grep "^CODEX_BRIDGE_TOKEN=" "$AGENTIC_ENV" | cut -d= -f2)
+    grep -q "CODEX_BRIDGE_URL" "$AGENTIC_ENV" || echo 'CODEX_BRIDGE_URL=http://localhost:8092' >> "$AGENTIC_ENV"
+    grep -q "CODEX_BRIDGE_TOKEN" .env 2>/dev/null || echo "CODEX_BRIDGE_TOKEN=$BRIDGE_TOKEN" >> .env
+    log "Bridge token ready and propagated"
 fi
 
 # ── Phase 2b: Standalone UI ──
@@ -98,16 +103,8 @@ pip install --quiet fastapi uvicorn httpx python-dotenv || fail "Failed to insta
 log "Phase 5: UI wiring (Python patcher)"
 python3 bridge/patcher.py
 
-# H3: Ensure agentic-ui has bridge env vars
-AGENTIC_ENV="$HOME/projects/agentic-ui/.env"
-if [ -f "$AGENTIC_ENV" ]; then
-    grep -q "CODEX_BRIDGE_URL" "$AGENTIC_ENV" || echo 'CODEX_BRIDGE_URL=http://localhost:8092' >> "$AGENTIC_ENV"
-    grep -q "CODEX_BRIDGE_TOKEN" "$AGENTIC_ENV" || echo "CODEX_BRIDGE_TOKEN=$(openssl rand -hex 16)" >> "$AGENTIC_ENV"
-    # Copy same token to codex-drone .env
-    BRIDGE_TOKEN=$(grep CODEX_BRIDGE_TOKEN "$AGENTIC_ENV" | cut -d= -f2)
-    grep -q "CODEX_BRIDGE_TOKEN" .env 2>/dev/null || echo "CODEX_BRIDGE_TOKEN=$BRIDGE_TOKEN" >> .env
-    log "Bridge token synchronized between agentic-ui and codex-drone"
-else
+# Token already generated and propagated in Phase 2b pre-req above.
+if [ ! -f "$AGENTIC_ENV" ]; then
     log "WARNING: $AGENTIC_ENV not found — set CODEX_BRIDGE_URL and CODEX_BRIDGE_TOKEN manually"
 fi
 
@@ -128,14 +125,26 @@ log "Starting bridge for health check..."
 source .env 2>/dev/null || true
 CODEX_BRIDGE_TOKEN="${CODEX_BRIDGE_TOKEN:-test}" python3 bridge/server.py &
 BRIDGE_PID=$!
-sleep 2
-if kill -0 $BRIDGE_PID 2>/dev/null; then
+# Poll /health instead of sleeping a fixed interval
+BRIDGE_READY=false
+for i in $(seq 1 10); do
+    sleep 1
+    if ! kill -0 $BRIDGE_PID 2>/dev/null; then
+        log "WARNING: Bridge exited early — skipping live tests"
+        break
+    fi
+    if python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8092/health', timeout=2)" 2>/dev/null; then
+        BRIDGE_READY=true
+        break
+    fi
+done
+if $BRIDGE_READY; then
     python3 bridge/test_bridge.py --live 2>&1 | tee -a bootstrap_report.md
-    kill $BRIDGE_PID 2>/dev/null || true
-    wait $BRIDGE_PID 2>/dev/null || true
 else
-    log "WARNING: Bridge failed to start — skipping live tests"
+    log "WARNING: Bridge not ready after 10s — skipping live tests"
 fi
+kill $BRIDGE_PID 2>/dev/null || true
+wait $BRIDGE_PID 2>/dev/null || true
 
 # ── Phase 7b: Standalone UI validation ──
 if [ -f "$UI_DIR/docker-compose.yml" ]; then

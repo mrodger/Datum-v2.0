@@ -94,8 +94,9 @@ async def run_codex_agent(messages: list, model: str = "gpt-5.4"):
                             continue
     except Exception as e:                                       # C1: catch connection errors
         yield {"type": "error", "detail": f"codex-bridge unreachable: {e}"}
+        done_emitted = True                                      # error is terminal; suppress synthetic done
     finally:
-        if not done_emitted:                                     # C3: synthetic done on failure
+        if not done_emitted:                                     # C3: synthetic done only on clean exit
             yield {"type": "done", "cost_usd": 0, "input_tokens": 0, "output_tokens": 0}
 # --- End Codex Bridge Integration ---
 '''

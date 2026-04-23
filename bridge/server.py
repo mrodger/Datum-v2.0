@@ -2,11 +2,11 @@
 Codex Bridge — FastAPI service translating agentic-ui chat → codex exec.
 Hardened per GPT-5.4 adversarial review (task 80da8fcb).
 """
-import asyncio, json, logging, os, signal, time, uuid
+import asyncio, hmac, json, logging, os, signal, time, uuid
 from pathlib import Path
 from dotenv import load_dotenv                           # R3-F3: load .env
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 # R3-F3: Load .env from bridge directory and project root
@@ -53,7 +53,7 @@ class ChatRequest(BaseModel):
 # ── Auth (R3-F6: proper FastAPI dependency) ────────────────────
 def verify_auth(authorization: str = Header(...)):
     """F7: Shared secret between agentic-ui and bridge."""
-    if authorization != f"Bearer {BRIDGE_TOKEN}":
+    if not hmac.compare_digest(authorization, f"Bearer {BRIDGE_TOKEN}"):
         raise HTTPException(401, "unauthorized")
 
 # ── Path validation ─────────────────────────────────────────────
@@ -118,12 +118,6 @@ def parse_codex_event(line: str) -> dict | None:
         elif content:
             return {"type": "text", "text": content}
 
-    elif etype == "item.started":
-        # Stream text deltas if present
-        delta = item.get("delta", "")
-        if delta:
-            return {"type": "text", "text": delta}
-
     elif etype == "turn.completed":
         cost = usage.get("cost_usd", 0)
         return {"type": "done",
@@ -152,7 +146,10 @@ def health():
     }
     ready = all([checks["codex_binary"], checks["api_key_set"]])
     status_code = 200 if ready else 503
-    return {"status": "ready" if ready else "not_ready", "checks": checks}
+    return JSONResponse(
+        {"status": "ready" if ready else "not_ready", "checks": checks},
+        status_code=status_code,
+    )
 
 @app.post("/chat")
 async def chat(req: ChatRequest, request: Request,
@@ -191,9 +188,9 @@ async def chat(req: ChatRequest, request: Request,
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env={                                    # F6/C-H1: minimal env only
-                    "PATH": os.environ.get("PATH", ""),
-                    "HOME": os.environ.get("HOME", ""),
+                env={                                    # F6/C-H1: fixed env, no inherited values
+                    "PATH": "/usr/local/bin:/usr/bin:/bin",
+                    "HOME": str(Path.home()),
                     "OPENAI_API_KEY": OPENAI_API_KEY,
                     "NO_COLOR": "1",
                 },
