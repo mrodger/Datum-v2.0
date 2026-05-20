@@ -1,0 +1,34 @@
+{
+  "n_docs": 1000,
+  "n_gold_queries": 20,
+  "top_k": 10,
+  "rrf_k": 60,
+  "runs_per_query": 5,
+  "warmups_discarded": 1,
+  "results": {
+    "bm25": {
+      "n_calls_timed": 80,
+      "latency_ms_p50": 35.26519995648414,
+      "latency_ms_p95": 42.83032997045666,
+      "latency_ms_mean": 29.574535734718665,
+      "recall_at_10_mean": 0.785,
+      "recall_at_10_min": 0.2
+    },
+    "vector": {
+      "n_calls_timed": 80,
+      "latency_ms_p50": 0.7163279806263745,
+      "latency_ms_p95": 1.4957910170778632,
+      "latency_ms_mean": 0.8362775624846108,
+      "recall_at_10_mean": 0.865,
+      "recall_at_10_min": 0.4
+    },
+    "rrf": {
+      "n_calls_timed": 80,
+      "latency_ms_p50": 2.122455043718219,
+      "latency_ms_p95": 2.3587129544466734,
+      "latency_ms_mean": 2.1529959078179672,
+      "recall_at_10_mean": 0.84,
+      "recall_at_10_min": 0.4
+    }
+  }
+}

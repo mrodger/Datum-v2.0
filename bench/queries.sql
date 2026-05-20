@@ -1,0 +1,47 @@
+-- bench/queries.sql
+-- Reference queries for the three retrieval modes.
+-- Each is parameterised on $1 = text query string, $2 = embedding vector,
+-- $3 = limit (typically 10), $4 = RRF k constant (60).
+--
+-- These are reference forms; harness.py uses prepared statements built
+-- from these patterns.
+
+-- 1) Pure BM25 (pg_search)
+--    Top-k by BM25 score over title+body.
+--    SELECT id, paradedb.score(id) AS score
+--    FROM bench_docs
+--    WHERE id @@@ paradedb.match('body', $1)
+--    ORDER BY score DESC
+--    LIMIT $3;
+
+-- 2) Pure vector (HNSW cosine)
+--    Top-k by cosine distance.
+--    SELECT id, 1 - (embedding <=> $2) AS score
+--    FROM bench_docs
+--    ORDER BY embedding <=> $2
+--    LIMIT $3;
+
+-- 3) RRF fusion CTE (k=60 default)
+--    Reciprocal Rank Fusion combining BM25 and vector lists.
+--    WITH bm AS (
+--        SELECT id, row_number() OVER (ORDER BY paradedb.score(id) DESC) AS r
+--        FROM bench_docs
+--        WHERE id @@@ paradedb.match('body', $1)
+--        LIMIT 50
+--    ),
+--    vec AS (
+--        SELECT id, row_number() OVER (ORDER BY embedding <=> $2) AS r
+--        FROM (
+--            SELECT id, embedding FROM bench_docs
+--            ORDER BY embedding <=> $2 LIMIT 50
+--        ) s
+--    )
+--    SELECT id, SUM(1.0 / ($4 + r)) AS rrf_score
+--    FROM (
+--        SELECT id, r FROM bm
+--        UNION ALL
+--        SELECT id, r FROM vec
+--    ) u
+--    GROUP BY id
+--    ORDER BY rrf_score DESC
+--    LIMIT $3;
